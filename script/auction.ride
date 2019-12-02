@@ -218,7 +218,7 @@ func sellBond() = {
             ScriptResult(
                 WriteSet([
                     DataEntry(OrderbookKey, dropOrder(orderId)),
-                    DataEntry(getOrderStatusKey(orderId), NEW)
+                    DataEntry(getOrderStatusKey(orderId), CANCELED)
                ]),
                TransferSet([
                     ScriptTransfer(addressFromStringValue(orderOwner), freeTotal, neutrinoAssetId)
