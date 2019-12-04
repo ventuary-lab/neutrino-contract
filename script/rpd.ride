@@ -32,8 +32,8 @@ func getNumberByAddressAndKey(address: String, key: String) = {
             case _ => 0
     }
 }
-func getStringByAddressAndKey(address: String, key: String) = {
-    match getString(addressFromStringValue(address), key) {
+func getStringByAddressAndKey(address: Address, key: String) = {
+     match getString(address, key) {
             case a:String => a
             case _ => ""
     }
@@ -52,13 +52,17 @@ let NeutrinoContractKey = "neutrino_contract"
 
 # keys
 let BalanceKey = "rpd_balance"
+let LastConfirmTxKey = "last_confirm_tx"
+let ControlContractKey = "control_contract"
 
 func getUserBalanceKey(owner: String, assetId: String) = BalanceKey + "_" + assetId + "_" + owner
 func getContractBalanceKey(assetId: String) = BalanceKey + "_" + assetId
 #end keys
 
 #global vars
-let neutrinoContract = getStringByKey(NeutrinoContractKey)
+let neutrinoContract = addressFromStringValue(getStringByKey(NeutrinoContractKey))
+let controlContract = addressFromStringValue(getStringByAddressAndKey(neutrinoContract, ControlContractKey))
+let lastConfirmTx = getStringByAddressAndKey(controlContract, LastConfirmTxKey)
 # Neutrino asset id
 # this value is from neutrino.ride
 let neutrinoAssetId = fromBase58String(getStringByAddressAndKey(neutrinoContract, NeutrinoAssetIdKey))
@@ -108,4 +112,9 @@ func unlockNeutrino(unlockAmount: Int, assetIdString: String) = {
             TransferSet([ScriptTransfer(addressFromStringValue(account), unlockAmount, neutrinoAssetId)])
         )
     }
+}
+
+@Verifier(tx)
+func verify() = {
+    lastConfirmTx == toBase58String(tx.id)
 }

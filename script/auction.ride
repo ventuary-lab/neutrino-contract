@@ -55,6 +55,7 @@ let ControlContractKey = "control_contract"
 let BalanceLockedkKey = "balance_lock_"
 let WavesLockedBalanceKey = BalanceLockedkKey + "waves"
 let NeutrinoLockedBalanceKey = BalanceLockedkKey + "neutrino"
+let LastConfirmTxKey = "last_confirm_tx"
 
 func getOrderPriceKey(orderId: String) = "order_price_" + orderId
 func getOrderTotalKey(orderId: String) = "order_total_" + orderId
@@ -65,7 +66,7 @@ func getOrderFilledTotalKey(orderId: String) = "order_filled_total_" + orderId
 func getOrderHistoryKey(height: Int) = "order_history_" + toString(height)
 #-------------------Convert functions-------------------
 func convertNeutrinoToWaves(amount: Int, price: Int) = amount*100/price*WAVELET/PAULI
-func convertWavesToNeutrino(amount: Int, price: Int) = amount*price/100*PAULI/WAVELET 
+func convertWavesToNeutrino(amount: Int, price: Int) = amount*price/100*PAULI/WAVELET
 func convertNeutrinoToBond(amount: Int) = amount/PAULI 
 func convertBondToNeutrino(amount: Int) = amount*PAULI 
 func convertWavesToBond(amount: Int, price: Int) = convertNeutrinoToBond(convertWavesToNeutrino(amount, price))
@@ -76,6 +77,7 @@ let neutrinoContract = addressFromStringValue(getStringByKey(NeutrinoContractKey
 let controlContract = addressFromStringValue(getStringByAddressAndKey(neutrinoContract, ControlContractKey)) ## The value from neutrino.ride
 let currentPrice = getNumberByAddressAndKey(controlContract, PriceKey) # The value from control.ride
 
+let lastConfirmTx = getStringByAddressAndKey(controlContract, LastConfirmTxKey)
 let neutrinoLockedBalance = getNumberByAddressAndKey(neutrinoContract, NeutrinoLockedBalanceKey)
 let wavesLockedBalance = getNumberByAddressAndKey(neutrinoContract, WavesLockedBalanceKey)
 let neutrinoAssetId = fromBase58String(getStringByAddressAndKey(neutrinoContract, NeutrinoAssetIdKey)) # Assets ids. The value from neutrino.ride
@@ -125,8 +127,8 @@ func addBuyBondOrder(price : Int, position: Int) = {
         then throw("max discount is 50%")
     else if(pmt.amount < MINORDERTOTAL)
         then throw("min order total equals " + toString(MINORDERTOTAL))
-    else if (pmt.assetId != neutrinoAssetId)
-        then throw("can use neutrino only")
+    else if (isDefined(pmt.assetId))
+        then throw("can use waves only")
     else if(price <= 0)
         then throw("price less zero")
     else if(getOrderOwner(newOrderId) != "")
@@ -175,7 +177,7 @@ func cancelOrder(orderId : String) = {
                 DataEntry(getOrderStatusKey(orderId), CANCELED)
             ]),
             TransferSet([
-                ScriptTransfer(i.caller, amount, neutrinoAssetId)
+                ScriptTransfer(i.caller, amount, unit)
             ])
         )
     }
@@ -207,7 +209,7 @@ func sellBond() = {
         let orderPrice = getOrderPrice(orderId)
         let orderOwner = getOrderOwner(orderId)
         let freeTotal = orderTotal-filledTotal
-        let amount = convertNeutrinoToBond(freeTotal*100/orderPrice);
+        let amount = convertWavesToBond(freeTotal, orderPrice);
     
         let filledAmount = if(bondAmount >= amount) then amount else bondAmount
 
@@ -221,7 +223,7 @@ func sellBond() = {
                     DataEntry(getOrderStatusKey(orderId), CANCELED)
                ]),
                TransferSet([
-                    ScriptTransfer(addressFromStringValue(orderOwner), freeTotal, neutrinoAssetId)
+                    ScriptTransfer(addressFromStringValue(orderOwner), freeTotal, unit)
                 ])
             )
         else {
@@ -234,9 +236,14 @@ func sellBond() = {
                ]),
                TransferSet([
                     ScriptTransfer(addressFromStringValue(orderOwner), filledAmount, bondAssetId),
-                    ScriptTransfer(neutrinoContract, total, neutrinoAssetId)
+                    ScriptTransfer(neutrinoContract, total, unit)
                 ])
             )
         }
     }
+}
+
+@Verifier(tx)
+func verify() = {
+    lastConfirmTx == toBase58String(tx.id)
 }

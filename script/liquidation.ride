@@ -200,3 +200,8 @@ func liquidateBond() = {
         )
     }
 }
+
+@Verifier(tx)
+func verify() = {
+    lastConfirmTx == toBase58String(tx.id)
+}

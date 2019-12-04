@@ -50,8 +50,8 @@ func convertJsonArrayToList(jsonArray: String) = {
 
 #-------------------Constants--------------------------- 
 let BLOCK = "block"
-let UNBLOCK = "unblock"
-let UPDATE = "update"
+let CONFIRMTX = "confirm_tx"
+let NONE = "none"
 
 #-------------------Constructor-------------------------
 let OraclesKey = "oracles"
@@ -69,9 +69,10 @@ let IsBlockedKey = "is_blocked"
 let BlockExpireVoteKey = "vote_expire_block"
 let ScriptUpdateBlockKey = "script_update_block"
 let PriceIndexKey = "price_index"
+let LastConfirmTxKey = "last_confirm_tx"
 
 func getAdminVoteKey(owner: String) = "admin_vote_" + owner
-func getAdminVoteActionKey(owner: String) = getAdminVoteKey(owner) + "_" + "action"
+func getAdminVoteArgumentsKey(owner: String) = "vote_action_" + owner + "_arguments"
 func getBlackSwarmPriceKey(block: Int) = "black_swarm_price" + "_" + toString(block)
 func getPriceHistoryKey(block: Int) = PriceKey + "_" + toString(block)
 func getHeightPriceByIndexKey(index: Int) = PriceIndexKey + "_" + toString(index)
@@ -80,21 +81,21 @@ func getOracleProvidePriceKey(height: Int) = "price_" + toString(height)
 #-------------------Global vars-------------------------
 let price = getNumberByKey(PriceKey)
 let priceIndex = getNumberByKey(PriceIndexKey)
-let blockExpireVote = getNumberByKey(BlockExpireVoteKey)
-let scriptUpdateBlock = getNumberByKey(ScriptUpdateBlockKey)
-let scriptUpdateInterval = getNumberByKey(ScriptUpdateIntervalKey)
 let isBlocked = getBoolByKey(IsBlockedKey)
 let bftCoefficientOracle = getNumberByKey(CoefficientOracleKey)
 let bftCoefficientAdmin = getNumberByKey(CoefficientAdminKey)
 let percentPriceOffset = getNumberByKey(PriceOffsetKey)
 let voteInterval = getNumberByKey(VoteIntervalKey)
+let blockExpireVote = getNumberByKey(BlockExpireVoteKey)
 let oracles = getStringByKey(OraclesKey)
 let admins = getStringByKey(AdminsKey)
 let oraclesList = convertJsonArrayToList(oracles) 
 let adminsList = convertJsonArrayToList(admins) 
+let lastConfirmTx = getStringByKey(LastConfirmTxKey)
 
 #-------------------Get func----------------------------
-func getAdminVoteAction(owner: String) = getStringByKey(getAdminVoteActionKey(owner))
+func getAdminVote(owner: String) = getStringByKey(getAdminVoteKey(owner))
+func getAdminVoteArguments(owner: String) = getStringByKey(getAdminVoteArgumentsKey(owner))
 func getOracleProvideHeight(owner: String, height: Int) = getNumberByAddressAndKey(addressFromStringValue(owner), getOracleProvidePriceKey(height))
 func getPriceHistory(height: Int) = getNumberByKey(getPriceHistoryKey(height))
 #-------------------Other func--------------------------
@@ -104,25 +105,36 @@ func isOracle(address: String) = {
 func isAdmin(address: String) = {
     isDefined(indexOf(admins, address))
 }
-
 #-------------------Fold func--------------------------
-func filterAdminsVoteByAction(result: List[String], address: String, action: String) = 
-   address :: result
+func foldSummByAction(result: Int, address: String, action: String) = 
+    if(getAdminVote(address) == action) then 1 else 0
 
-func filterAdminsVoteByBlockAction(result: List[String], address: String) =
-   filterAdminsVoteByAction(result, address, BLOCK)
+func foldSummByBlock(result: Int, address: String) =
+   foldSummByAction(result, address, BLOCK)
 
-func filterAdminsVoteByUnblockAction(result: List[String], address: String) =
-   filterAdminsVoteByAction(result, address, UNBLOCK)
+func foldSummByConfirmTx(result: Int, address: String) =
+   foldSummByAction(result, address, CONFIRMTX)
 
-func filterAdminsVoteByUpdateAction(result: List[String], address: String) =
-   filterAdminsVoteByAction(result, address, UPDATE)
+func summByAction(admins: List[String], action: String) = {
+    if(action == BLOCK) 
+        then FOLD<5>(admins, 0, foldSummByBlock)
+    else if(action == CONFIRMTX)
+        then FOLD<5>(admins, 0, foldSummByConfirmTx)
+    else throw("-")
+}
 
+func summByArguments(admins: List[String], arguments: String) = {
+    (if(getAdminVoteArguments(admins[0]) == arguments) then 1 else 0) +
+    (if(getAdminVoteArguments(admins[1]) == arguments) then 1 else 0) +
+    (if(getAdminVoteArguments(admins[2]) == arguments) then 1 else 0) +
+    (if(getAdminVoteArguments(admins[3]) == arguments) then 1 else 0) +
+    (if(getAdminVoteArguments(admins[4]) == arguments) then 1 else 0)
+}
 #-------------------Callable----------------------
 
 # [called by price oracles]
 @Callable(i)
-func finalizeCurrentPrice() = {        
+func finalizeCurrentPrice() = {
     let prices = [
         getOracleProvideHeight(oraclesList[0], height),
         getOracleProvideHeight(oraclesList[1], height),
@@ -166,40 +178,58 @@ func finalizeCurrentPrice() = {
 
 # [called by emergency oracles]
 @Callable(i)
-func vote(action: String) = {
+func vote(action: String, arguments: String) = {
     let account = toString(i.caller)
-    let adminsListWithoutAccount = convertJsonArrayToList(dropElementInJsonArray(admins, account))
-    let lastAction = getAdminVoteAction(account)
+    let vote = getAdminVote(account)
 
-    let blockVotes = FOLD<5>(adminsListWithoutAccount, [], filterAdminsVoteByBlockAction)
-    let unblockVotes = FOLD<5>(adminsListWithoutAccount, [], filterAdminsVoteByUnblockAction)
-    let updateVotes = FOLD<5>(adminsListWithoutAccount, [], filterAdminsVoteByUpdateAction)
-
-    let blockVoteCount = size(blockVotes) + if( action == BLOCK) then 1 else 0
-    let unblockVoteCount = size(unblockVotes) + if( action == UNBLOCK) then 1 else 0
-    let updateVotesCount = size(updateVotes) + if( action == UPDATE) then 1 else 0
+    let voteCount = summByAction(adminsList, action) + 1
+    let equalArgumentsCount = summByArguments(adminsList, arguments) + 1
+    let isVotingEnded = height > blockExpireVote
 
     let resetResult = [
         DataEntry(BlockExpireVoteKey, 0),
-        DataEntry(getAdminVoteActionKey(adminsListWithoutAccount[0]), ""),
-        DataEntry(getAdminVoteActionKey(adminsListWithoutAccount[1]), ""),
-        DataEntry(getAdminVoteActionKey(adminsListWithoutAccount[2]), ""),
-        DataEntry(getAdminVoteActionKey(adminsListWithoutAccount[3]), "")
+        DataEntry(getAdminVoteKey(adminsList[0]), ""),
+        DataEntry(getAdminVoteKey(adminsList[1]), ""),
+        DataEntry(getAdminVoteKey(adminsList[2]), ""),
+        DataEntry(getAdminVoteKey(adminsList[3]), ""),
+        DataEntry(getAdminVoteKey(adminsList[4]), "")
     ]
-    if(blockVoteCount >= bftCoefficientAdmin || unblockVoteCount >= bftCoefficientAdmin) then {
-        WriteSet(
-            cons(DataEntry(IsBlockedKey, if(blockVoteCount >= bftCoefficientAdmin) then true else false), resetResult)
-        )
-    }
-    else if(updateVotesCount > bftCoefficientAdmin) then {
-        WriteSet(
-            cons(DataEntry(ScriptUpdateBlockKey, if(updateVotesCount > bftCoefficientAdmin) then height + scriptUpdateInterval else scriptUpdateBlock), resetResult)
-        )
+
+    if(vote != "")
+        then throw("-")
+    else if(!isAdmin(account))
+        then throw("")
+    else if(voteCount >= bftCoefficientAdmin && equalArgumentsCount >= bftCoefficientAdmin && !isVotingEnded) then {
+        if(action == BLOCK) then {
+            let isBlocking = arguments == "true"
+            WriteSet(
+                cons(DataEntry(IsBlockedKey, isBlocking), resetResult)
+            )
+        }
+        else if(action == CONFIRMTX) then {
+            let id = arguments
+            WriteSet(
+                cons(DataEntry(LastConfirmTxKey, id), resetResult)
+            )
+        }
+        else 
+            throw("invalid action")
     }
     else {
         WriteSet([
-            DataEntry(BlockExpireVoteKey, if(height > blockExpireVote) then height + voteInterval else blockExpireVote),
-            DataEntry(getAdminVoteActionKey(account), action)
+            DataEntry(BlockExpireVoteKey, if(isVotingEnded) then height + voteInterval else blockExpireVote),
+            DataEntry(getAdminVoteKey(adminsList[0]), if(isVotingEnded) then "" else getAdminVote(adminsList[0])),
+            DataEntry(getAdminVoteKey(adminsList[1]), if(isVotingEnded) then "" else getAdminVote(adminsList[1])),
+            DataEntry(getAdminVoteKey(adminsList[2]), if(isVotingEnded) then "" else getAdminVote(adminsList[2])),
+            DataEntry(getAdminVoteKey(adminsList[3]), if(isVotingEnded) then "" else getAdminVote(adminsList[3])),
+            DataEntry(getAdminVoteKey(adminsList[4]), if(isVotingEnded) then "" else getAdminVote(adminsList[4])),
+            DataEntry(getAdminVoteKey(account), action),
+            DataEntry(getAdminVoteArgumentsKey(account), arguments)
         ])
     }
+}
+
+@Verifier(tx)
+func verify() = {
+    lastConfirmTx == toBase58String(tx.id)
 }

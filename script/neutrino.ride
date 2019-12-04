@@ -50,7 +50,7 @@ let LISTSPLITSYMBOL = "_"
 let LISTDATASYMBOL = "+"
 let WAVELET = 100000000
 let PAULI = 1000000
-let DEFICITOFFSET = 10
+let DEFICITOFFSET = 5
 
 #-------------------Constructor-------------------------
 let NeutrinoAssetIdKey = "neutrino_asset_id"
@@ -74,8 +74,11 @@ func getRPDContractBalanceKey(assetId: ByteVector) = RPDBalanceKey + "_" + toBas
 let PriceKey = "price"
 let PriceIndexKey = "price_index"
 let IsBlockedKey = "is_blocked"
+let LastConfirmTxKey = "last_confirm_tx"
+
 func getPriceHistoryKey(block: Int) = PriceKey + "_" + toString(block)
 func getHeightPriceByIndexKey(index: Int) = PriceIndexKey + "_" + toString(index)
+
 #------This contract----------
 let BalanceLockedkKey = "balance_lock_"
 let WavesLockedBalanceKey = BalanceLockedkKey + "waves"
@@ -117,6 +120,7 @@ let bondSupply = extract(assetInfo(bondAssetId)).quantity - assetBalance(this, b
 let neutrinoSupply = extract(assetInfo(neutrinoAssetId)).quantity - assetBalance(this, neutrinoAssetId) + neutrinoLockedBalance
 let surplus = convertWavesToNeutrino(reserve, currentPrice) - neutrinoSupply
 let deficit = neutrinoSupply - convertWavesToNeutrino(reserve, currentPrice)
+let lastConfirmTx = getStringByAddressAndKey(controlContract, LastConfirmTxKey)
 
 #-------------------Get functions----------------------
 #------RPD contract---------
@@ -261,6 +265,6 @@ func verify() = {
     match tx {
         case leasingTx: LeaseTransaction | LeaseCancelTransaction =>
             sigVerify(tx.bodyBytes, tx.proofs[0], nodeOracleProviderPubKey)
-        case _ => sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)
+        case _ => lastConfirmTx == toBase58String(tx.id)
     }
 }
