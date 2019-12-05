@@ -1,0 +1,3 @@
+[submodule "neutrino-api"]
+	path = neutrino-api
+	url = git@github.com:ventuary-lab/neutrino-api.git

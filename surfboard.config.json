@@ -12,7 +12,7 @@
             "API_BASE": "https://testnode1.wavesnodes.com",
             "CHAIN_ID": "T",
             "timeout": 60000,
-            "SEED": "seed phrase of fifteen words to check custom asset dapp integration21"
+            "SEED": "x"
         },
         "mainnet": {
             "API_BASE": "https://nodes.wavesnodes.com",

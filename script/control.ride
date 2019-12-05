@@ -59,7 +59,6 @@ let AdminsKey = "admins"
 let VoteIntervalKey = "vote_interval"
 let CoefficientOracleKey = "coefficient_oracle"
 let CoefficientAdminKey = "coefficient_admin"
-let ScriptUpdateIntervalKey = "script_update_interval"
 let PriceOffsetKey = "price_offset"
 
 #-------------------Keys---------------------------------
@@ -67,7 +66,6 @@ let PriceOffsetKey = "price_offset"
 let PriceKey = "price"
 let IsBlockedKey = "is_blocked"
 let BlockExpireVoteKey = "vote_expire_block"
-let ScriptUpdateBlockKey = "script_update_block"
 let PriceIndexKey = "price_index"
 let LastConfirmTxKey = "last_confirm_tx"
 
@@ -110,17 +108,17 @@ func foldSummByAction(result: Int, address: String, action: String) =
     if(getAdminVote(address) == action) then 1 else 0
 
 func foldSummByBlock(result: Int, address: String) =
-   foldSummByAction(result, address, BLOCK)
+   result + foldSummByAction(result, address, BLOCK)
 
 func foldSummByConfirmTx(result: Int, address: String) =
-   foldSummByAction(result, address, CONFIRMTX)
+   result + foldSummByAction(result, address, CONFIRMTX)
 
 func summByAction(admins: List[String], action: String) = {
     if(action == BLOCK) 
         then FOLD<5>(admins, 0, foldSummByBlock)
     else if(action == CONFIRMTX)
         then FOLD<5>(admins, 0, foldSummByConfirmTx)
-    else throw("-")
+    else throw("action not found")
 }
 
 func summByArguments(admins: List[String], arguments: String) = {
@@ -176,15 +174,40 @@ func finalizeCurrentPrice() = {
     }
 }
 
+
 # [called by emergency oracles]
 @Callable(i)
 func vote(action: String, arguments: String) = {
     let account = toString(i.caller)
     let vote = getAdminVote(account)
-
-    let voteCount = summByAction(adminsList, action) + 1
-    let equalArgumentsCount = summByArguments(adminsList, arguments) + 1
     let isVotingEnded = height > blockExpireVote
+
+    if(vote != "" && !isVotingEnded)
+        then throw("vote already cast")
+    else if(!isAdmin(account))
+        then throw("user is not admin")
+    else {
+        WriteSet([
+            DataEntry(BlockExpireVoteKey, if(isVotingEnded) then height + voteInterval else blockExpireVote),
+            DataEntry(getAdminVoteKey(adminsList[0]), if(isVotingEnded) then "" else getAdminVote(adminsList[0])),
+            DataEntry(getAdminVoteKey(adminsList[1]), if(isVotingEnded) then "" else getAdminVote(adminsList[1])),
+            DataEntry(getAdminVoteKey(adminsList[2]), if(isVotingEnded) then "" else getAdminVote(adminsList[2])),
+            DataEntry(getAdminVoteKey(adminsList[3]), if(isVotingEnded) then "" else getAdminVote(adminsList[3])),
+            DataEntry(getAdminVoteKey(adminsList[4]), if(isVotingEnded) then "" else getAdminVote(adminsList[4])),
+            DataEntry(getAdminVoteKey(account), action),
+            DataEntry(getAdminVoteArgumentsKey(account), arguments)
+        ])
+    }
+}
+
+# [called by emergency oracles]
+@Callable(i)
+func finalizeVote(action: String, arguments: String) = {
+    let account = toString(i.caller)
+    let vote = getAdminVote(account)
+
+    let voteCount = summByAction(adminsList, action)
+    let equalArgumentsCount = summByArguments(adminsList, arguments)
 
     let resetResult = [
         DataEntry(BlockExpireVoteKey, 0),
@@ -195,11 +218,13 @@ func vote(action: String, arguments: String) = {
         DataEntry(getAdminVoteKey(adminsList[4]), "")
     ]
 
-    if(vote != "")
-        then throw("-")
-    else if(!isAdmin(account))
-        then throw("")
-    else if(voteCount >= bftCoefficientAdmin && equalArgumentsCount >= bftCoefficientAdmin && !isVotingEnded) then {
+    if(height > blockExpireVote)
+        then throw("voting ended")
+    else if(action == "")
+        then throw("invalid arguments")
+    else if(arguments == "")
+        then throw("invalid arguments")
+    else if(voteCount >= bftCoefficientAdmin && equalArgumentsCount >= bftCoefficientAdmin) then {
         if(action == BLOCK) then {
             let isBlocking = arguments == "true"
             WriteSet(
@@ -215,18 +240,7 @@ func vote(action: String, arguments: String) = {
         else 
             throw("invalid action")
     }
-    else {
-        WriteSet([
-            DataEntry(BlockExpireVoteKey, if(isVotingEnded) then height + voteInterval else blockExpireVote),
-            DataEntry(getAdminVoteKey(adminsList[0]), if(isVotingEnded) then "" else getAdminVote(adminsList[0])),
-            DataEntry(getAdminVoteKey(adminsList[1]), if(isVotingEnded) then "" else getAdminVote(adminsList[1])),
-            DataEntry(getAdminVoteKey(adminsList[2]), if(isVotingEnded) then "" else getAdminVote(adminsList[2])),
-            DataEntry(getAdminVoteKey(adminsList[3]), if(isVotingEnded) then "" else getAdminVote(adminsList[3])),
-            DataEntry(getAdminVoteKey(adminsList[4]), if(isVotingEnded) then "" else getAdminVote(adminsList[4])),
-            DataEntry(getAdminVoteKey(account), action),
-            DataEntry(getAdminVoteArgumentsKey(account), arguments)
-        ])
-    }
+    else throw("voteCount < bftCoefficientAdmin")
 }
 
 @Verifier(tx)

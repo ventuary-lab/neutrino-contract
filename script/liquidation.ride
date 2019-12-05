@@ -51,6 +51,7 @@ let ControlContractKey = "control_contract"
 let BalanceLockedkKey = "balance_lock_"
 let WavesLockedBalanceKey = BalanceLockedkKey + "waves"
 let NeutrinoLockedBalanceKey = BalanceLockedkKey + "neutrino"
+let LastConfirmTxKey = "last_confirm_tx"
 
 func getOrderTotalKey(orderId: String) = "order_total_" + orderId
 func getOrderOwnerKey(orderId: String) = "order_owner_" + orderId
@@ -77,6 +78,7 @@ let bondAssetId = fromBase58String(getStringByAddressAndKey(neutrinoContract, Bo
 let reserve = wavesBalance(neutrinoContract) - wavesLockedBalance
 let neutrinoSupply = extract(assetInfo(neutrinoAssetId)).quantity - assetBalance(neutrinoContract, neutrinoAssetId) + neutrinoLockedBalance - assetBalance(this, neutrinoAssetId)
 let surplus = convertWavesToNeutrino(reserve, currentPrice) - neutrinoSupply
+let lastConfirmTx = getStringByAddressAndKey(controlContract, LastConfirmTxKey)
 
 #-------------------Get functions------------------------
 func getOrderTotal(id : String) = getNumberByKey(getOrderTotalKey(id))

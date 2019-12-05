@@ -1,4 +1,4 @@
-const deployHelper = require('../../api/ContractHelper.js').ContractHelper;
+const deployHelper = require('../../neutrino-api/ContractHelper.js').ContractHelper;
 
 const wvs = 10 ** 8;
 
