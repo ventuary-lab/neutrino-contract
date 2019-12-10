@@ -137,8 +137,8 @@ func getWavesLockedBalance(owner: String) =  getNumberByKey(getWavesLockedBalanc
 func getNeutrinoLockedBalance(owner: String) =  getNumberByKey(getNeutrinoLockedBalanceKey(owner))
 func getUnlockBalanceBlock(owner : String) = getNumberByKey(getBalanceUnlockBlockKey(owner))
 func getRPDProfit(count: Int) = getNumberByKey(getRPDProfitKey(count))
-#-------------------Callable----------------------
 
+#-------------------Callable----------------------
 # Instant swap of WAVES to Neutrino token at the current price on the smart contract
 # [called by user]
 @Callable(i)
