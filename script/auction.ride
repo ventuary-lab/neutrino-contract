@@ -36,8 +36,7 @@ let WAVELET = 100000000
 let ORDERSPLITSYMBOL = "_"
 let PAULI = 1000000
 let PERCENTACCURACY = 1000
-let MAXDISCOUNT = 50
-let MINORDERTOTAL = 10*PAULI
+let MINORDERTOTAL = 10*WAVELET
 #------Order statuses------
 let CANCELED = "canceled"
 let NEW = "new"
@@ -124,9 +123,7 @@ func addBuyBondOrder(price : Int, position: Int) = {
     let pmt = extract(i.payment);
     let newOrderId = toBase58String(keccak256(toBytes(price) + toBytes(pmt.amount) + i.caller.bytes + toBytes(height)))
     
-    if(price < MAXDISCOUNT)
-        then throw("max discount is 50%")
-    else if(pmt.amount < MINORDERTOTAL)
+    if(pmt.amount < MINORDERTOTAL)
         then throw("min order total equals " + toString(MINORDERTOTAL))
     else if (isDefined(pmt.assetId))
         then throw("can use waves only")
