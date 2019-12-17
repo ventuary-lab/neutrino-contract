@@ -119,9 +119,9 @@ let minNeutrinoSwapAmount = getNumberByKey(MinNeutrinoSwapAmountKey)
 let reserve = wavesBalance(this) - wavesLockedBalance
 let bondAssetId = fromBase58String(getStringByKey(BondAssetIdKey))
 let bondSupply = extract(assetInfo(bondAssetId)).quantity - assetBalance(this, bondAssetId)
-let neutrinoSupply = extract(assetInfo(neutrinoAssetId)).quantity - assetBalance(this, neutrinoAssetId) + neutrinoLockedBalance - assetBalance(addressFromStringValue(liquidationContract), neutrinoAssetId)
+let neutrinoSupply = extract(assetInfo(neutrinoAssetId)).quantity - assetBalance(this, neutrinoAssetId) + neutrinoLockedBalance
 let surplus = convertWavesToNeutrino(reserve, currentPrice) - neutrinoSupply
-let deficit = neutrinoSupply - convertWavesToNeutrino(reserve, currentPrice) 
+let deficit = (neutrinoSupply - assetBalance(addressFromStringValue(liquidationContract), neutrinoAssetId)) - convertWavesToNeutrino(reserve, currentPrice) 
 let pubKeyAdmins = getStringByAddressAndKey(controlContract, AdminsKey)
 let pubKeyAdminsList = convertJsonArrayToList(pubKeyAdmins) 
 
