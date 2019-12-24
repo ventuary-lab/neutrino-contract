@@ -45,8 +45,6 @@ let NeutrinoContractKey = "neutrino_contract"
 
 #-------------------Keys---------------------------------
 let BalanceKey = "rpd_balance"
-let LastConfirmTxKey = "last_confirm_tx"
-let ControlContractKey = "control_contract"
 
 func getUserBalanceKey(owner: String, assetId: String) = BalanceKey + "_" + assetId + "_" + owner
 func getContractBalanceKey(assetId: String) = BalanceKey + "_" + assetId
@@ -55,19 +53,14 @@ func getExpireProposalKey(hash: String) = "proposal_expire" + "_" + hash
 func getOwnerProposalKey(hash: String) = "proposal_owner" + "_" + hash
 func getArgumentsProposalKey(hash: String) = "proposal_arguments" + "_" + hash
 func getVoteKey(owner: String, hash: String) = "proposal_vote" + "_" + owner + "_" + hash
+
 #-------------------Global vars-------------------------
 let neutrinoContract = addressFromStringValue(getStringByKey(NeutrinoContractKey))
-let controlContract = addressFromStringValue(getStringByAddressAndKey(neutrinoContract, ControlContractKey))
-let lastConfirmTx = getStringByAddressAndKey(controlContract, LastConfirmTxKey)
-
-# Neutrino asset id
-# this value is from neutrino.ride
 let neutrinoAssetId = fromBase58String(getStringByAddressAndKey(neutrinoContract, NeutrinoAssetIdKey))
 
 #-------------------Get functions----------------------
 func getContractBalance(assetId: String) = getNumberByKey(getContractBalanceKey(assetId))
 func getUserBalance(owner : String, assetId: String) = getNumberByKey(getUserBalanceKey(owner, assetId))
-
 
 func getExpireProposal(hash: String) = getNumberByKey(getExpireProposalKey(hash))
 func getOwnerProposal(hash: String) = getStringByKey(getOwnerProposalKey(hash))
@@ -147,5 +140,17 @@ func createProposal(arguments: String, expairHeight: Int) = {
 
 @Verifier(tx)
 func verify() = {
-    lastConfirmTx == toBase58String(tx.id)
+    let pubKeyAdminsList = [
+        "BLEoguzPVKVTfXxxT3W7Rqf8aUm2ggC9Vemd2MQawM2G",
+        "FWVffYr2ALmHMejZm3WqeLz6Sdym3gLFGtJn4KTwyU5x",
+        "3Wh2LaWcb5gg7K2pPcW3Ep6EAuRBzYkAgrdpt43jTDFa",
+        "5WRXFSjwcTbNfKcJs8ZqXmSSWYsSVJUtMvMqZj5hH4Nc"
+    ]
+    let count =
+        (if(sigVerify(tx.bodyBytes, tx.proofs[0], fromBase58String(pubKeyAdminsList[0]))) then 1 else 0) +
+        (if(sigVerify(tx.bodyBytes, tx.proofs[1], fromBase58String(pubKeyAdminsList[1]))) then 1 else 0) +
+        (if(sigVerify(tx.bodyBytes, tx.proofs[2], fromBase58String(pubKeyAdminsList[2]))) then 1 else 0) +
+        (if(sigVerify(tx.bodyBytes, tx.proofs[3], fromBase58String(pubKeyAdminsList[3]))) then 2 else 0)
+
+    count >= 3
 }

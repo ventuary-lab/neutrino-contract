@@ -86,10 +86,7 @@ let percentPriceOffset = getNumberByKey(PriceOffsetKey)
 let voteInterval = getNumberByKey(VoteIntervalKey)
 let blockExpireVote = getNumberByKey(BlockExpireVoteKey)
 let oracles = getStringByKey(OraclesKey)
-let admins = getStringByKey(AdminsKey)
 let oraclesList = convertJsonArrayToList(oracles) 
-let adminsList = convertJsonArrayToList(admins) 
-let lastConfirmTx = getStringByKey(LastConfirmTxKey)
 
 #-------------------Get func----------------------------
 func getAdminVote(owner: String) = getStringByKey(getAdminVoteKey(owner))
@@ -100,9 +97,7 @@ func getPriceHistory(height: Int) = getNumberByKey(getPriceHistoryKey(height))
 func isOracle(address: String) = {
     isDefined(indexOf(oracles, address))
 }
-func isAdmin(address: String) = {
-    isDefined(indexOf(admins, address))
-}
+
 #-------------------Fold func--------------------------
 func foldSummByAction(result: Int, address: String, action: String) = 
     if(getAdminVote(address) == action) then 1 else 0
@@ -174,76 +169,19 @@ func finalizeCurrentPrice() = {
     }
 }
 
-
-# [called by emergency oracles]
-@Callable(i)
-func vote(action: String, arguments: String) = {
-    let account = toString(i.caller)
-    let vote = getAdminVote(account)
-    let isVotingEnded = height > blockExpireVote
-
-    if(vote != "" && !isVotingEnded)
-        then throw("vote already cast")
-    else if(!isAdmin(account))
-        then throw("user is not admin")
-    else {
-        WriteSet([
-            DataEntry(BlockExpireVoteKey, if(isVotingEnded) then height + voteInterval else blockExpireVote),
-            DataEntry(getAdminVoteKey(adminsList[0]), if(isVotingEnded) then "" else getAdminVote(adminsList[0])),
-            DataEntry(getAdminVoteKey(adminsList[1]), if(isVotingEnded) then "" else getAdminVote(adminsList[1])),
-            DataEntry(getAdminVoteKey(adminsList[2]), if(isVotingEnded) then "" else getAdminVote(adminsList[2])),
-            DataEntry(getAdminVoteKey(adminsList[3]), if(isVotingEnded) then "" else getAdminVote(adminsList[3])),
-            DataEntry(getAdminVoteKey(adminsList[4]), if(isVotingEnded) then "" else getAdminVote(adminsList[4])),
-            DataEntry(getAdminVoteKey(account), action),
-            DataEntry(getAdminVoteArgumentsKey(account), arguments)
-        ])
-    }
-}
-
-# [called by emergency oracles]
-@Callable(i)
-func finalizeVote(action: String, arguments: String) = {
-    let account = toString(i.caller)
-    let vote = getAdminVote(account)
-
-    let voteCount = summByAction(adminsList, action)
-    let equalArgumentsCount = summByArguments(adminsList, arguments)
-
-    let resetResult = [
-        DataEntry(BlockExpireVoteKey, 0),
-        DataEntry(getAdminVoteKey(adminsList[0]), ""),
-        DataEntry(getAdminVoteKey(adminsList[1]), ""),
-        DataEntry(getAdminVoteKey(adminsList[2]), ""),
-        DataEntry(getAdminVoteKey(adminsList[3]), ""),
-        DataEntry(getAdminVoteKey(adminsList[4]), "")
-    ]
-
-    if(height > blockExpireVote)
-        then throw("voting ended")
-    else if(action == "")
-        then throw("invalid arguments")
-    else if(arguments == "")
-        then throw("invalid arguments")
-    else if(voteCount >= bftCoefficientAdmin && equalArgumentsCount >= bftCoefficientAdmin) then {
-        if(action == BLOCK) then {
-            let isBlocking = arguments == "true"
-            WriteSet(
-                cons(DataEntry(IsBlockedKey, isBlocking), resetResult)
-            )
-        }
-        else if(action == CONFIRMTX) then {
-            let id = arguments
-            WriteSet(
-                cons(DataEntry(LastConfirmTxKey, id), resetResult)
-            )
-        }
-        else 
-            throw("invalid action")
-    }
-    else throw("voteCount < bftCoefficientAdmin")
-}
-
 @Verifier(tx)
 func verify() = {
-    lastConfirmTx == toBase58String(tx.id)
+    let pubKeyAdminsList = [
+        "BLEoguzPVKVTfXxxT3W7Rqf8aUm2ggC9Vemd2MQawM2G",
+        "FWVffYr2ALmHMejZm3WqeLz6Sdym3gLFGtJn4KTwyU5x",
+        "3Wh2LaWcb5gg7K2pPcW3Ep6EAuRBzYkAgrdpt43jTDFa",
+        "5WRXFSjwcTbNfKcJs8ZqXmSSWYsSVJUtMvMqZj5hH4Nc"
+    ]
+    let count =
+        (if(sigVerify(tx.bodyBytes, tx.proofs[0], fromBase58String(pubKeyAdminsList[0]))) then 1 else 0) +
+        (if(sigVerify(tx.bodyBytes, tx.proofs[1], fromBase58String(pubKeyAdminsList[1]))) then 1 else 0) +
+        (if(sigVerify(tx.bodyBytes, tx.proofs[2], fromBase58String(pubKeyAdminsList[2]))) then 1 else 0) +
+        (if(sigVerify(tx.bodyBytes, tx.proofs[3], fromBase58String(pubKeyAdminsList[3]))) then 2 else 0)
+
+    count >= 3
 }
