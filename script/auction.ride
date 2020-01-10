@@ -213,7 +213,7 @@ func sellBond() = {
     
         let fillableAmount = if(bondAmount >= amount) then amount else bondAmount
 
-        let total = fraction((fillableAmount*orderPrice),PAULI,100)
+        let total = fraction((fillableAmount*orderPrice),WAVELET,100)
         if(total == 0 || amount == 0) then
             ScriptResult(
                 WriteSet([
