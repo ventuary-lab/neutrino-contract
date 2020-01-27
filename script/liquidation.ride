@@ -79,12 +79,13 @@ let firstOrder = getStringByKey(FirstOrderKey)
 let lastOrder = getStringByKey(LastOrderKey)
 
 #-------------------Global vars deficit, locked & supply -------------------------
+let avgPrice = getNumberByKey("avg_price")/1000000 # example: 85011621
 let currentPrice = getNumberByAddressAndKey(controlContract, PriceKey) # The value from control.ride
 let neutrinoLockedBalance = getNumberByAddressAndKey(neutrinoContract, NeutrinoLockedBalanceKey) #locked balance from USDN -> WAVES swap
 let wavesLockedBalance = getNumberByAddressAndKey(neutrinoContract, WavesLockedBalanceKey) #locked balance from WAVES -> USDN swap
 let reserve = wavesBalance(neutrinoContract) - wavesLockedBalance #waves reserves to cover USDN supply
 let neutrinoSupply = neutrinoLockedBalance + extract(assetInfo(neutrinoAssetId)).quantity - assetBalance(neutrinoContract, neutrinoAssetId) - assetBalance(liquidationContract, neutrinoAssetId) # supply outside main sc or liquidation contract
-let surplus = convertWavesToNeutrino(reserve, currentPrice) - neutrinoSupply
+let surplus = convertWavesToNeutrino(reserve, if(avgPrice > 0) then avgPrice else currentPrice) - neutrinoSupply
 
 
 #-------------------Get functions------------------------
