@@ -117,14 +117,15 @@ let bondAssetId = fromBase58String(getStringByKey(BondAssetIdKey))
 
 let neutrinoContract = this
 #-------------------Global vars deficit, locked & supply -------------------------
+let avgPrice = getNumberByKey("avg_price")/1000000 # example: 85011621
 let currentPrice = getNumberByAddressAndKey(controlContract, PriceKey) # The value from control.ride
 let neutrinoLockedBalance = getNumberByKey(NeutrinoLockedBalanceKey) #locked balance from USDN -> WAVES swap
 let wavesLockedBalance = getNumberByKey(WavesLockedBalanceKey) #locked balance from WAVES -> USDN swap
 let reserve = wavesBalance(neutrinoContract) - wavesLockedBalance #waves reserves to cover USDN supply
 let neutrinoSupply = neutrinoLockedBalance + extract(assetInfo(neutrinoAssetId)).quantity - assetBalance(neutrinoContract, neutrinoAssetId) 
     - assetBalance(addressFromStringValue(liquidationContract), neutrinoAssetId) # supply outside main sc or liquidation contract
-let surplus = convertWavesToNeutrino(reserve, currentPrice) - neutrinoSupply
-let deficit = neutrinoSupply - convertWavesToNeutrino(reserve, currentPrice)
+let surplus = convertWavesToNeutrino(reserve, if(avgPrice > 0) then avgPrice else currentPrice) - neutrinoSupply
+let deficit = -surplus
 
 
 #-------------------Get functions----------------------
@@ -243,17 +244,16 @@ func withdraw(account : String, index: Int) = {
 @Callable(i)
 func transferToAuction() = {
     let deficitBondAmount = convertNeutrinoToBond(deficit) - assetBalance(addressFromStringValue(auctionContract), bondAssetId)
-    let minDeficit = convertNeutrinoToBond(neutrinoSupply)*DEFICITOFFSET/100
-
+    
     let surplusWithLiquidation = surplus - assetBalance(addressFromStringValue(liquidationContract), neutrinoAssetId)
     if(isBlocked)
         then throw("contract is blocked by EMERGENCY SHUTDOWN actions untill reactivation by emergency oracles") # see control.ride
-    else if(deficitBondAmount >= minDeficit && deficitBondAmount > 0)
+    else if(deficitBondAmount > 0)
         then TransferSet([ScriptTransfer(addressFromStringValue(auctionContract), deficitBondAmount, bondAssetId)])
     else if(surplusWithLiquidation > 1*PAULI)
         then TransferSet([ScriptTransfer(addressFromStringValue(liquidationContract), surplusWithLiquidation, neutrinoAssetId)])
     else 
-        throw("bond were generated or do not need it. Deficit:" + toString(deficitBondAmount) + "|" + toString(minDeficit) + ". Surplus:" + toString(surplusWithLiquidation) + "|" + toString(surplus))
+        throw("bond were generated or do not need it. Deficit:" + toString(deficitBondAmount) + "|" + toString(0) + ". Surplus:" + toString(surplusWithLiquidation) + "|" + toString(surplus))
 }
 
 # Transfers tokens from one address to another via smart contact
