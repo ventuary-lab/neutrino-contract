@@ -62,14 +62,18 @@ let PriceOffsetKey = "price_offset"
 let PriceKey = "price"
 let IsBlockedKey = "is_blocked"
 let PriceIndexKey = "price_index"
+let AvgPriceKey = "avg_price" # X10^6
 
 func getBlackSwarmPriceKey(block: Int) = "black_swarm_price" + "_" + toString(block)
 func getPriceHistoryKey(block: Int) = PriceKey + "_" + toString(block)
 func getHeightPriceByIndexKey(index: Int) = PriceIndexKey + "_" + toString(index)
 func getOracleProvidePriceKey(height: Int) = "price_" + toString(height)
 
+func getNewAvgPrice(prev: Int, price: Int) = fraction(prev*999802 + price*198, 1, 1000000) #exp moving average price X10^6, weekly; example: 85009641
+
 #-------------------Global vars-------------------------
 let price = getNumberByKey(PriceKey)
+let avgPrice = getNumberByKey(AvgPriceKey)
 let priceIndex = getNumberByKey(PriceIndexKey)
 let isBlocked = getBoolByKey(IsBlockedKey)
 let bftCoefficientOracle = 3
@@ -216,6 +220,7 @@ func finalizeCurrentPrice() = {
         let newPriceIndex = priceIndex + 1
         WriteSet([
             DataEntry(PriceKey, newPrice),
+            DataEntry(AvgPriceKey, if (avgPrice > 0) then getNewAvgPrice(avgPrice, newPrice*1000000) else newPrice*1000000),
             DataEntry(getPriceHistoryKey(height), newPrice),
             DataEntry(PriceIndexKey, newPriceIndex),
             DataEntry(getHeightPriceByIndexKey(newPriceIndex), height)
