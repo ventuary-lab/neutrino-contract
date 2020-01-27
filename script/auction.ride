@@ -80,13 +80,14 @@ let neutrinoAssetId = fromBase58String(getStringByAddressAndKey(neutrinoContract
 let bondAssetId = fromBase58String(getStringByAddressAndKey(neutrinoContract, BondAssetIdKey))
 
 #-------------------Global vars deficit, locked & supply -------------------------
+let avgPrice = getNumberByKey("avg_price")/1000000 # example: 85011621
 let currentPrice = getNumberByAddressAndKey(controlContract, PriceKey) # The value from control.ride
 let neutrinoLockedBalance = getNumberByAddressAndKey(neutrinoContract, NeutrinoLockedBalanceKey) #locked balance from USDN -> WAVES swap
 #cannot be expressed by complexity limitations: let wavesLockedBalance = getNumberByAddressAndKey(neutrinoContract, WavesLockedBalanceKey) #locked balance from WAVES -> USDN swap
 let reserve = wavesBalance(neutrinoContract) - 
     getNumberByAddressAndKey(neutrinoContract, WavesLockedBalanceKey) #waves reserves to cover USDN supply
 let neutrinoSupply = neutrinoLockedBalance + extract(assetInfo(neutrinoAssetId)).quantity - assetBalance(neutrinoContract, neutrinoAssetId) - assetBalance(liquidationContract, neutrinoAssetId) # supply outside main sc or liquidation contract
-let deficit = neutrinoSupply - convertWavesToNeutrino(reserve, currentPrice)
+let deficit = neutrinoSupply - convertWavesToNeutrino(reserve, if(avgPrice > 0) then avgPrice else currentPrice)
 
 
 #-------------------Get functions----------------------
