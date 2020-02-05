@@ -114,6 +114,7 @@ func dropOrder(orderId: String) = {
     parts[0] + parts[1]
 }
 #-------------------Callable---------------------------
+func amountBasesToExecuteOrderAdj(wavesAmount: Int, orderPrice: Int) = fraction(wavesAmount*fraction(1000, 10, orderPrice), 10, WAVELET*1000)
 
 # set buy bonds order
 # [called by user]
@@ -122,8 +123,21 @@ func addBuyBondOrder(price : Int, position: Int) = {
     let pmt = extract(i.payment);
     let newOrderId = toBase58String(keccak256(toBytes(price) + toBytes(pmt.amount) + i.caller.bytes + toBytes(height)))
     # price = 100*usdnb/waves, but we have to work with price with another scale: priceWavesByBondCents = 100*waves/usdnb, so priceWavesByBondCents = 100*1/(price/100)
-    let priceWavesByBondCents = fraction(100, 100, price)
-    let roi = fraction(priceWavesByBondCents - currentPrice, 100, currentPrice) # Example: 1.2 WAVES/USDNB (1.2 bonds for 1 waves) and 0.8 WAVES/USD (0.8 usd for 1 waves) gives 100*(1.2-0.8/0.8) 50% ROI
+    let priceWavesByBondCents = fraction(100, 100*1000, price)
+    let amountBases = amountBasesToExecuteOrderAdj(pmt.amount, price)
+    let totalOrderWaveletesRequired = convertBondToWaves(amountBases, priceWavesByBondCents) # expected in wavelets
+    let returnWaves = pmt.amount - totalOrderWaveletesRequired
+    let roi = fraction(priceWavesByBondCents - (currentPrice*1000), 100, (currentPrice*1000)) # Example: 1.2 WAVES/USDNB (1.2 bonds for 1 waves) and 0.8 WAVES/USD (0.8 usd for 1 waves) gives 100*(1.2-0.8/0.8) 50% ROI
+    let data = WriteSet([
+                DataEntry(OrderbookKey, addOrder(newOrderId, position)),
+                DataEntry(getOrderPriceKey(newOrderId), price),
+                DataEntry(getOrderTotalKey(newOrderId), totalOrderWaveletesRequired),
+                DataEntry(getOrderOwnerKey(newOrderId), toString(i.caller)),
+                DataEntry(getOrderHeightKey(newOrderId), height),
+                DataEntry(getOrderStatusKey(newOrderId), NEW),
+                DataEntry("debug_order_currentPrice_" + newOrderId, currentPrice),
+                DataEntry("debug_order_roi_" + newOrderId, roi)
+            ])
     if(pmt.amount < MINORDERTOTAL)
         then throw("min order total equals " + toString(MINORDERTOTAL))
     else if (roi > MAXROI)
@@ -146,17 +160,14 @@ func addBuyBondOrder(price : Int, position: Int) = {
 
         if (isNextOrderError || isPrevOrderError)
             then throw("invalid order isPrevOrderError:" + toString(isPrevOrderError) + " isNextOrderError:" + toString(isNextOrderError))
-        else
-            WriteSet([
-                DataEntry(OrderbookKey, addOrder(newOrderId, position)),
-                DataEntry(getOrderPriceKey(newOrderId), price),
-                DataEntry(getOrderTotalKey(newOrderId), pmt.amount),
-                DataEntry(getOrderOwnerKey(newOrderId), toString(i.caller)),
-                DataEntry(getOrderHeightKey(newOrderId), height),
-                DataEntry(getOrderStatusKey(newOrderId), NEW),
-                DataEntry("debug_order_currentPrice_" + newOrderId, currentPrice),
-                DataEntry("debug_order_roi_" + newOrderId, roi)
+        else if (returnWaves == 0)
+            then data
+        else  ScriptResult(
+            data, 
+            TransferSet([
+                ScriptTransfer(i.caller, returnWaves, unit)
             ])
+        )
     }
 }
 
@@ -212,7 +223,7 @@ func sellBond() = {
         let priceWavesByBondCents = fraction(100, 100, orderPrice)
         
         let remainedTotal = getOrderTotal(orderId) - filledTotal #waveletes
-        let amountToExecuteOrder = convertWavesToBond(remainedTotal, priceWavesByBondCents); # expected price format 100*waves/usd; return scale: bonds (integers/dollars)
+        let amountToExecuteOrder = amountBasesToExecuteOrderAdj(remainedTotal, orderPrice); # expected price format 100*waves/usd; return scale: bonds (integers/dollars)
     
         let fillOrderCondition = bondAmount >= amountToExecuteOrder
         let fillableOrderAmount = if(fillOrderCondition) then amountToExecuteOrder else bondAmount #scale: bonds (integers/dollars) то, сколько бондов можно продать в эту итерацию
