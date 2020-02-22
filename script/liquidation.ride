@@ -58,6 +58,7 @@ let WavesLockedBalanceKey = BalanceLockedkKey + "waves"
 let NeutrinoLockedBalanceKey = BalanceLockedkKey + "neutrino"
 let FirstOrderKey = "order_first"
 let LastOrderKey = "order_last"
+let DeficitKey = "deficit"
 
 func getOrderPrevKey(orderId: String) = "order_prev_" + orderId
 func getOrderNextKey(orderId: String) = "order_next_" + orderId
@@ -87,13 +88,7 @@ let lastOrder = getStringByKey(LastOrderKey)
 let isBlocked = getBoolByAddressAndKey(controlContract, "is_blocked")
 
 #-------------------Global vars deficit, locked & supply -------------------------
-let currentPrice = getNumberByAddressAndKey(controlContract, PriceKey) # The value from control.ride
-let neutrinoLockedBalance = getNumberByAddressAndKey(neutrinoContract, NeutrinoLockedBalanceKey) #locked balance from USDN -> WAVES swap
-let wavesLockedBalance = getNumberByAddressAndKey(neutrinoContract, WavesLockedBalanceKey) #locked balance from WAVES -> USDN swap
-let reserve = wavesBalance(neutrinoContract) - wavesLockedBalance #waves reserves to cover USDN supply
-let neutrinoSupply = neutrinoLockedBalance + extract(assetInfo(neutrinoAssetId)).quantity - assetBalance(neutrinoContract, neutrinoAssetId) - assetBalance(liquidationContract, neutrinoAssetId) # supply outside main sc or liquidation contract
-let surplus = convertWavesToNeutrino(reserve, currentPrice) - neutrinoSupply
-
+let surplus = -1*getNumberByAddressAndKey(controlContract, DeficitKey)
 
 #-------------------Get functions------------------------
 func getOrderTotal(id : String) = getNumberByKey(getOrderTotalKey(id))
