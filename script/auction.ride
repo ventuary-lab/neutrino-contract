@@ -242,14 +242,15 @@ func sellBond() = {
         let amountToExecuteOrder = convertWavesToBond(remainedTotal, priceWavesByBondCents); # expected price format 100*waves/usd; return scale: bonds (integers/dollars)
     
         let fillOrderCondition = bondAmount >= amountToExecuteOrder
-        let fillableOrderAmount = if(fillOrderCondition) then amountToExecuteOrder else bondAmount #scale: bonds (integers/dollars) то, сколько бондов можно продать в эту итерацию
+        let fillableOrderAmount = if(fillOrderCondition) then amountToExecuteOrder else bondAmount #scale: bonds (integers/dollars)
 
         let totalOrderWaveletesRequired = convertBondToWaves(fillableOrderAmount, priceWavesByBondCents) # expected in wavelets
+        let futureRemainedTotal = convertWavesToBond(getOrderTotal(firstOrder) - (filledTotal + totalOrderWaveletesRequired), priceWavesByBondCents)
 
         if ( fraction(deficit, 100, neutrinoSupply) < roi || deficitPositive <= 0)
             then throw("deficit should be higther or equal than roi: " + toString(roi))
         else if (amountToExecuteOrder == 0) then
-            # this code is executing if there is not enough amount of waves to sell integer number of bonds, but there is still remaining waves amount in the order
+            # this code is deprecated
             ScriptResult(
                 WriteSet([
                     DataEntry(FirstOrderKey, nextOrder),
@@ -265,7 +266,7 @@ func sellBond() = {
         else if(totalOrderWaveletesRequired == 0) then
             throw("cannot fill order at the moment") #it happens if not enought bonds to fill the order by order price
         else {
-            let newStatus = if(fillOrderCondition && remainedTotal == 0) then FILLED else NEW
+            let newStatus = if(fillOrderCondition && futureRemainedTotal <= 0) then FILLED else NEW
             ScriptResult(
                 WriteSet([
                     DataEntry(getPrevOrderKey(nextOrder), if(newStatus == FILLED) then "" else firstOrder), #if current first order has new status filled so, his prev order is now empty
