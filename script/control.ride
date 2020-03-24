@@ -220,7 +220,7 @@ func finalizeCurrentPrice(price1: Int, sign1: ByteVector, price2: Int, sign2: By
     let pricesInRange = findPricesInRange(prices)
     let priceProvidingCount = pricesInRange.size();
 
-    if (priceProvidingCount < 3) then throw("Could not finalize price because of big variation: height=" + toString(height)
+    if (priceProvidingCount < bftCoefficientOracle) then throw("Could not finalize price because of big variation: height=" + toString(height)
              + "\n" + pubKeyOraclesList[0]  + "=" + toString(prices[0])
              + "\n" + pubKeyOraclesList[1] + "=" + toString(prices[1])
              + "\n" + pubKeyOraclesList[2] + "=" + toString(prices[2])
