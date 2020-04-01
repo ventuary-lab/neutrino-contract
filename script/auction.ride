@@ -262,7 +262,15 @@ func sellBond() = {
                 ])
             )
         else if(totalOrderWaveletesRequired == 0) then
-            throw("cannot fill order at the moment") #it happens if not enought bonds to fill the order by order price
+            throw("cannot fill order at the moment"
+                        + " deficit=" + deficit.toString()
+                        + " deficitPositive" + deficitPositive.toString()
+                        + " bondBalance=" + bondBalance.toString() 
+                        + " fillableOrderAmount" + fillableOrderAmount.toString()
+                        + " bondAmount=" + bondAmount.toString()
+                        + " amountToExecuteOrder=" + amountToExecuteOrder.toString()
+                        + " priceWavesByBondCents=" + priceWavesByBondCents.toString()
+                        ) #it happens if not enought bonds to fill the order by order price
         else {
             let newStatus = if(fillOrderCondition && remainedTotal == 0) then FILLED else NEW
             ScriptResult(
