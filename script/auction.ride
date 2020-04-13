@@ -229,8 +229,10 @@ func sellBond() = {
         let nextOrder = getNextOrder(firstOrder)
         let filledTotal = getOrderFilledTotal(firstOrder) #waveletes; returns 0 if there is no records
         let orderPrice = getOrderPrice(firstOrder) #100*nsbt/waves
-        let priceWavesByBondCents = fraction(100, 100, orderPrice)
         let roi = getNumberByKey(getRoiByOrderIdKey(firstOrder))
+
+        let priceWavesByBondCents = fraction(100+roi, currentPrice, 100)
+
 
         let remainedTotal = getOrderTotal(firstOrder) - filledTotal #waveletes
         let amountToExecuteOrder = convertWavesToBond(remainedTotal, priceWavesByBondCents); # expected price format 100*waves/usd; return scale: nsbt (integers/dollars)
@@ -266,7 +268,7 @@ func sellBond() = {
                         + " priceWavesByBondCents=" + priceWavesByBondCents.toString()
                         ) #if not enough nsbt to fill the order by order price
         else {
-            let newStatus = if(fillOrderCondition && remainedTotal == 0) then FILLED else NEW
+            let newStatus = if(fillOrderCondition && (remainedTotal == 0 || remainedTotal == fillableOrderAmount)) then FILLED else NEW
             ScriptResult(
                 WriteSet([
                     DataEntry(getPrevOrderKey(nextOrder), if(newStatus == FILLED) then "" else firstOrder), #if current first order has new status filled so, his prev order is now empty
