@@ -115,16 +115,20 @@ let deprecatedBondAssetId = fromBase58String("975akZBfnMj513U7MZaHKzQrmsEx5aE3wd
 
 let neutrinoContract = this
 #-------------------Global vars deficit, locked & supply -------------------------
+let totalCDPWaves = getNumberByKey("total_cdp_waves")
+let totalCDPNeutrino = getNumberByKey("total_cdp_neutrino")
+
 let currentPrice = getNumberByAddressAndKey(controlContract, PriceKey) # The value from control.ride
 let neutrinoLockedBalance = getNumberByKey(NeutrinoLockedBalanceKey) #locked balance from USDN -> WAVES swap
 let wavesLockedBalance = getNumberByKey(WavesLockedBalanceKey) #locked balance from WAVES -> USDN swap
-let reserve = wavesBalance(neutrinoContract) - wavesLockedBalance #waves reserves to cover USDN supply
+let reserve = wavesBalance(neutrinoContract) - wavesLockedBalance - totalCDPWaves #waves reserves to cover USDN supply
 let neutrinoSupply = neutrinoLockedBalance + extract(assetInfo(neutrinoAssetId)).quantity - assetBalance(neutrinoContract, neutrinoAssetId) 
-    - assetBalance(addressFromStringValue(liquidationContract), neutrinoAssetId) # supply outside main sc or liquidation contract
+    - assetBalance(addressFromStringValue(liquidationContract), neutrinoAssetId) - totalCDPNeutrino # supply outside main sc or liquidation contract
 let surplus = convertWavesToNeutrino(reserve, currentPrice) - neutrinoSupply
 let deficit = neutrinoSupply - convertWavesToNeutrino(reserve, currentPrice)
 
 
+let overcollateralization = 50
 #-------------------Get functions----------------------
 #------RPD contract---------
 # The func is reading balances from rpd.ride
@@ -142,13 +146,106 @@ func getUnlockBalanceBlock(owner : String) = getNumberByKey(getBalanceUnlockBloc
 func getRPDProfit(count: Int) = getNumberByKey(getRPDProfitKey(count))
 #-------------------Callable----------------------
 
+# Create collateral 100 waves with 2$ waves price gives 100 usdn; 50% over cap = 100/price cap/pcap = 1.5; pcap = cap/1.5 
+# [called by user]
+@Callable(i)
+func createCollateral() = {
+    let pmt = extract(i.payment)
+    let account = toString(i.caller)
+    let newId = toBase58String(keccak256(toBytes(pmt.amount) + i.caller.bytes + toBytes(height)))
+    let releasedNeutrinos = fraction(convertWavesToNeutrino(pmt.amount, currentPrice), 100, 100 + overcollateralization)
+    if (pmt.amount < 10*minWavesSwapAmount)
+        then throw("The specified Waves amount is less than the required minimum of " + toString(10*minWavesSwapAmount) + " wavelets.")
+    else if (isDefined(pmt.assetId))
+        then throw("Only Waves token is allowed for CDP.")
+    else if(isBlocked)
+        then throw("contract is blocked by EMERGENCY SHUTDOWN actions untill reactivation by emergency oracles") # see control.ride
+    else if (getStringByKey("cdp_owner_" + newId) != "")
+        then throw("CDP has already been created") #
+    else 
+    ScriptResult(
+        WriteSet(
+            [
+                DataEntry("total_cdp_waves", totalCDPWaves + pmt.amount),
+                DataEntry("total_cdp_neutrino", totalCDPNeutrino + releasedNeutrinos),
+                DataEntry("cdp_owner_" + newId, account),
+                DataEntry("cdp_waves_" + newId, pmt.amount),
+                DataEntry("cdp_neutrino_" + newId, releasedNeutrinos),
+                DataEntry("cdp_height_", height),
+                DataEntry("cdp_status_" + newId, "new")
+            ]
+        ), 
+        TransferSet(
+            [
+                ScriptTransfer(addressFromStringValue(account), releasedNeutrinos, neutrinoAssetId)
+            ]
+        )
+    )
+}
+
+# Close collateral and withdraw locked waves
+# [called by user]
+@Callable(i)
+func closeCollateral(id : String) = {
+    let pmt = extract(i.payment)
+    let account = toString(i.caller)
+    let releasedNeutrinos = getNumberByKey("cdp_neutrino_" + id)
+    let lockedCDPWaves = getNumberByKey("cdp_waves_" + id)
+    let status = getStringByKey("cdp_status_" + id)
+
+    let profit = convertWavesToNeutrino(lockedCDPWaves, currentPrice) - fraction(releasedNeutrinos, 100 + overcollateralization, 100)
+    let tax = convertNeutrinoToWaves(profit, currentPrice)/2 #50% tax from profit it goes to liquidate bonds
+    if(pmt.amount < releasedNeutrinos)
+        then throw("not enough neutrino to close cdp")
+    else if(pmt.assetId != neutrinoAssetId)
+        then throw("must be neutrino asset id: " + neutrinoAssetIdString)
+    else if (convertWavesToNeutrino(lockedCDPWaves, currentPrice) <= releasedNeutrinos)
+        then throw("must be liquidated")
+    else if (status != "new")
+        then throw("wrong cdp status: " + status + "or order does not exist")
+    else
+    ScriptResult(
+        WriteSet(
+            [
+                DataEntry("total_cdp_waves", totalCDPWaves - lockedCDPWaves),
+                DataEntry("total_cdp_neutrino", totalCDPNeutrino - releasedNeutrinos),
+                DataEntry("cdp_status_" + id, "closed")
+            ]
+        ), 
+        TransferSet(
+            [
+                ScriptTransfer(addressFromStringValue(account), if (tax > 0 ) then lockedCDPWaves - tax else lockedCDPWaves, unit)
+            ]
+        )
+    )
+}
+
+# Close collateral and withdraw locked waves
+# [called by pacemaker]
+@Callable(i)
+func liquidateCollateral(id : String) = {
+    let releasedNeutrinos = getNumberByKey("cdp_neutrino_" + id)
+    let lockedCDPWaves = getNumberByKey("cdp_waves_" + id)
+    let status = getStringByKey("cdp_status_" + id)
+
+    let shoudLiquidate = convertWavesToNeutrino(lockedCDPWaves, currentPrice) <= releasedNeutrinos
+    if (status != "new")
+        then throw("wrong cdp status: " + status + "or order does not exist")
+    else if (shoudLiquidate) then
+        WriteSet([
+            DataEntry("total_cdp_waves", totalCDPWaves - lockedCDPWaves),
+            DataEntry("total_cdp_neutrino", totalCDPNeutrino - releasedNeutrinos),
+            DataEntry("cdp_status_" + id, "liquidated")
+        ])
+    else throw("cannot liquidate collateral")
+}
+
 # Instant swap of WAVES to Neutrino token at the current price on the smart contract
 # [called by user]
 @Callable(i)
 func swapWavesToNeutrino() = {
     let pmt = extract(i.payment)
     let account = toString(i.caller)
-    
     if (pmt.amount < minWavesSwapAmount)
         then throw("The specified Waves amount is less than the required minimum of " + toString(minWavesSwapAmount) + " wavelets.")
     else if (isDefined(pmt.assetId))
