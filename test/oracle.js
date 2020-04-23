@@ -3,7 +3,7 @@ let deployResult = {}
 
 describe('Oracle test', async function () {
     before(async function () {
-        deployResult = await deployHelper.deploy("TST-N", "TST-NB", "test asset", "test bond asset", "")
+        deployResult = await deployHelper.deploy("TST-N", "TST-NSBT", "test asset", "test base asset", "")
         
         setupAccounts({
             testAccount: 100000 * deployHelper.WAVELET

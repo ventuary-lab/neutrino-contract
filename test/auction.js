@@ -51,7 +51,7 @@ describe('Auction test', async function () {
             const amount = Math.floor(testHelper.getRandomNumber(10, 100)) * neutrinoHelper.WAVELET
             const price = Math.floor(testHelper.getRandomNumber(10, 15))
 
-            const id = await neutrinoApi.addBuyBondOrder(amount, price, accounts.testAccount)
+            const id = await neutrinoApi.addBuyBaseOrder(amount, price, accounts.testAccount)
         
             const state = await stateChanges(id);
             const stateObject = testHelper.convertDataStateToObject(state.data)
@@ -79,7 +79,7 @@ describe('Auction test', async function () {
             contractState = await accountData(deployResult.accounts.auctionContract.address)
             const amount = Math.floor(testHelper.getRandomNumber(10, 100)) * neutrinoHelper.WAVELET
 
-            const id = await neutrinoApi.addBuyBondOrder(amount, price, accounts.testAccount)
+            const id = await neutrinoApi.addBuyBaseOrder(amount, price, accounts.testAccount)
 
             const txState = await stateChanges(id);
             const txStateObject = testHelper.convertDataStateToObject(txState.data)
@@ -103,7 +103,7 @@ describe('Auction test', async function () {
         const contractState = await accountData(deployResult.accounts.auctionContract.address)
         const beforeFirstOrder = contractState["order_first"].value
         const beforeNextOrder = contractState["order_next_" + beforeFirstOrder].value
-        const id = await neutrinoApi.cancelBuyBondOrder(beforeFirstOrder, accounts.testAccount)
+        const id = await neutrinoApi.cancelBuyBaseOrder(beforeFirstOrder, accounts.testAccount)
 
         const txState = await stateChanges(id);
         const txStateObject = testHelper.convertDataStateToObject(txState.data)
@@ -120,7 +120,7 @@ describe('Auction test', async function () {
         const cancelOrder = contractState["order_next_" + beforeFirstOrder].value
         const nextOrder = contractState["order_next_" + cancelOrder].value
         const prevOrder = contractState["order_prev_" + cancelOrder].value
-        const id = await neutrinoApi.cancelBuyBondOrder(cancelOrder, accounts.testAccount)
+        const id = await neutrinoApi.cancelBuyBaseOrder(cancelOrder, accounts.testAccount)
 
         const txState = await stateChanges(id);
         const txStateObject = testHelper.convertDataStateToObject(txState.data)

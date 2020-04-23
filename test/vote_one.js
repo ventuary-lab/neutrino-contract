@@ -3,7 +3,7 @@ const NeutrinoApi = require('../neutrino-api/NeutrinoApi.js').NeutrinoApi;
 
 describe('Auction test', async function () {
     before(async function () {
-        deployResult = await deployHelper.deploy(env.SEED, env.API_BASE, env.CHAIN_ID, "./script/", "TST-N", "TST-NB", "test asset", "test bond asset", "") 
+        deployResult = await deployHelper.deploy(env.SEED, env.API_BASE, env.CHAIN_ID, "./script/", "TST-N", "TST-NSBT", "test asset", "test base asset", "") 
 
         var massTx = massTransfer({
             transfers: [

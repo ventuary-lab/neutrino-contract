@@ -54,7 +54,7 @@ let NeutrinoContractKey = "neutrino_contract"
 
 #-------------------Keys--------------------------------
 let PriceKey = "price"
-let BondAssetIdKey = "bond_asset_id"
+let BaseAssetIdKey = "base_asset_id" # Requires data transaction to change the data
 let NeutrinoAssetIdKey = "neutrino_asset_id"
 let ControlContractKey = "control_contract"
 let BalanceLockedkKey = "balance_lock_"
@@ -78,15 +78,15 @@ func getNextOrderKey(orderId: String) = "order_next_" + orderId
 func convertNeutrinoToWaves(amount: Int, price: Int) = fraction(fraction(amount, 100, price),WAVELET, PAULI)
 func convertWavesToNeutrino(amount: Int, price: Int) = fraction(fraction(amount, price, 100), PAULI, WAVELET)
 
-func convertWavesToBond(amount: Int, price: Int) = convertWavesToNeutrino(amount, price)
-func convertBondToWaves(amount: Int, price: Int) = convertNeutrinoToWaves(amount, price)
+func convertWavesToBase(amount: Int, price: Int) = convertWavesToNeutrino(amount, price)
+func convertBaseToWaves(amount: Int, price: Int) = convertNeutrinoToWaves(amount, price)
 
 #-------------------Global vars-------------------------
 let neutrinoContract = addressFromStringValue("3PC9BfRwJWWiw9AREE2B3eWzCks3CYtg4yo")
 let controlContract = addressFromStringValue("3P5Bfd58PPfNvBM2Hy8QfbcDqMeNtzg7KfP") ## The value from neutrino.ride
 let liquidationContract = addressFromStringValue("3P4PCxsJqMzQBALo8zANHtBDZRRquobHQp7")
 let neutrinoAssetId = fromBase58String("DG2xFkPdDwKUoBkzGAhQtLpSGzfXLiCYPEzeKH2Ad24p") # Assets ids. The value from neutrino.ride
-let bondAssetId = fromBase58String("6nSpVyNH7yM69eg446wrQR94ipbbcmZMU1ENPwanC97g") # NSBT with 6 decimals as USDN does
+let baseAssetId = fromBase58String("6nSpVyNH7yM69eg446wrQR94ipbbcmZMU1ENPwanC97g") # NSBT with 6 decimals as USDN
 
 let isBlocked = getBoolByAddressAndKey(controlContract, "is_blocked")
 
@@ -113,15 +113,15 @@ func getNextOrder(id: String) = getStringByKey(getNextOrderKey(id))
 
 #-------------------Callable---------------------------
 
-# set buy NSBT order
+# set buy base token order
 # [called by user]
 @Callable(i)
-func addBuyBondOrder(price : Int, prevOrder: String) = {
+func addBuyBaseOrder(price : Int, prevOrder: String) = {
     let pmt = extract(i.payment);
     let newOrderId = toBase58String(keccak256(toBytes(price) + toBytes(pmt.amount) + i.caller.bytes + toBytes(height) + i.transactionId))
-    # price = 100*nsbt/waves, but we have to work with price with another scale: priceWavesByBondCents = 100*waves/nsbt, so priceWavesByBondCents = 100*1/(price/100)
-    let priceWavesByBondCents = fraction(100, 100, price)
-    let roi = fraction(priceWavesByBondCents - currentPrice, 100, currentPrice) # Example: 1.2 WAVES/nsbt (1.2 NSBT for 1 waves) and 0.8 WAVES/USD (0.8 usd for 1 waves) gives 100*(1.2-0.8/0.8) 50% ROI
+    # price = 100*nsbt/waves, but we have to work with price with another scale: priceToBaseCents = 100*waves/nsbt, so priceToBaseCents = 100*1/(price/100)
+    let priceToBaseCents = fraction(100, 100, price)
+    let roi = fraction(priceToBaseCents - currentPrice, 100, currentPrice) # Example: 1.2 WAVES/nsbt (1.2 NSBT for 1 waves) and 0.8 WAVES/USD (0.8 usd for 1 waves) gives 100*(1.2-0.8/0.8) 50% ROI
 
     if (isBlocked)
         then throw("contract is blocked by EMERGENCY SHUTDOWN actions until reactivation by emergency oracles")
@@ -213,18 +213,18 @@ func cancelOrder(orderId : String) = {
 # called n times until all orders from the NSBT orderbook are sold
 # [called by pacemaker oracles]
 @Callable(i)
-func sellBond() = {
-    let bondBalance = assetBalance(this, bondAssetId) #integers (dollars)
-    let returnAmount = bondBalance - neutrinoSupply
+func sellBase() = {
+    let baseBalance = assetBalance(this, baseAssetId) #integers (dollars)
+    let returnAmount = baseBalance - neutrinoSupply
 
     if (isBlocked) 
         then throw("contract is blocked by EMERGENCY SHUTDOWN actions until reactivation by emergency oracles")
-    else if (bondBalance == 0)
+    else if (baseBalance == 0)
         then throw("without base tokens to sell")
     else if(returnAmount > 0) then {
         # return nsbts back if there is more nsbts than deficit  
         TransferSet([
-            ScriptTransfer(neutrinoContract, returnAmount, bondAssetId)
+            ScriptTransfer(neutrinoContract, returnAmount, baseAssetId)
         ])
     }
     else if(firstOrder == "")
@@ -235,18 +235,18 @@ func sellBond() = {
         let orderPrice = getOrderPrice(firstOrder) #100*nsbt/waves
         let roi = getNumberByKey(getRoiByOrderIdKey(firstOrder))
 
-        let priceWavesByBondCents = fraction(100+roi, currentPrice, 100)
+        let priceToBaseCents = fraction(100+roi, currentPrice, 100)
 
         let remainedTotal = getOrderTotal(firstOrder) - filledTotal #waveletes
-        let amountToExecuteOrder = convertWavesToBond(remainedTotal, priceWavesByBondCents); # expected price format 100*waves/usd; return scale: nsbt (integers/dollars)
+        let amountToExecuteOrder = convertWavesToBase(remainedTotal, priceToBaseCents); # expected price format 100*waves/usd; return scale: nsbt (integers/dollars)
     
-        let fillOrderCondition = bondBalance >= amountToExecuteOrder
-        let fillableOrderAmount = if(fillOrderCondition) then amountToExecuteOrder else bondBalance #scale: nsbt (integers/dollars) то, сколько бондов можно продать в эту итерацию
+        let fillOrderCondition = baseBalance >= amountToExecuteOrder
+        let fillableOrderAmount = if(fillOrderCondition) then amountToExecuteOrder else baseBalance #scale: nsbt (integers/dollars) то, сколько бондов можно продать в эту итерацию
 
-        let totalOrderWaveletesRequired = convertBondToWaves(fillableOrderAmount, priceWavesByBondCents) # expected in wavelets
-        let nbTokensSellCondition = fraction(deficit, 100, neutrinoSupply) >= roi # it's working for both: deficit & profict as well (15% > 10% and -15% < -10%)
+        let totalOrderWaveletesRequired = convertBaseToWaves(fillableOrderAmount, priceToBaseCents) # expected in wavelets
+        let baseTokensSellCondition = fraction(deficit, 100, neutrinoSupply) >= roi # it's working for both: deficit & profict as well (15% > 10% and -15% < -10%)
 
-        if (!nbTokensSellCondition)
+        if (!baseTokensSellCondition)
             then throw("innapropriate roi: " + toString(roi))
         else if (amountToExecuteOrder == 0) then
             # this code is executing if there is not enough amount of waves to sell integer number of nsbt, but there is still remaining waves amount in the order
@@ -273,7 +273,7 @@ func sellBond() = {
                     DataEntry(getOrderStatusKey(firstOrder), newStatus) # filled status if there is no remained waveletes in the order
                ]),
                TransferSet([
-                    ScriptTransfer(addressFromStringValue(getOrderOwner(firstOrder)), fillableOrderAmount, bondAssetId),
+                    ScriptTransfer(addressFromStringValue(getOrderOwner(firstOrder)), fillableOrderAmount, baseAssetId),
                     ScriptTransfer(neutrinoContract, totalOrderWaveletesRequired, unit)
                 ])
             )

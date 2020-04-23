@@ -9,7 +9,7 @@ let oracleApi = null;
 
 describe('Swap test', async function () {
     before(async function () {
-        deployResult = await deployHelper.deploy(env.SEED, env.API_BASE, env.CHAIN_ID, "./script/", "TST-N", "TST-NB", "test asset", "test bond asset", "") 
+        deployResult = await deployHelper.deploy(env.SEED, env.API_BASE, env.CHAIN_ID, "./script/", "TST-N", "TST-NSBT", "test asset", "test base asset", "") 
   
         neutrinoApi = await NeutrinoApi.create(env.API_BASE, env.CHAIN_ID, deployResult.accounts.neutrinoContract.address);
         oracleApi = await oracleHelper.OracleApi.create(env.API_BASE, env.CHAIN_ID, deployResult.accounts.neutrinoContract.address);

@@ -28,7 +28,7 @@ describe('Liqidate test', async function () {
         await broadcast(massTx);
         await waitForTx(massTx.id);
 
-        var massBondTx = massTransfer({
+        var massBaseTx = massTransfer({
             transfers: [
                 {
                     amount: 10000000,
@@ -36,11 +36,11 @@ describe('Liqidate test', async function () {
                 }
             ],
             fee: 600000,
-            assetId: deployResult.assets.bondAssetId
+            assetId: deployResult.assets.baseAssetId
         }, deployResult.accounts.neutrinoContract.phrase)
-        await broadcast(massBondTx);
+        await broadcast(massBaseTx);
 
-        await waitForTx(massBondTx.id);
+        await waitForTx(massBaseTx.id);
         neutrinoApi = await neutrinoHelper.create(env.API_BASE, env.CHAIN_ID, deployResult.accounts.neutrinoContract.address);
         oracleApi = await oracleHelper.create(env.API_BASE, env.CHAIN_ID, deployResult.accounts.neutrinoContract.address);
     });

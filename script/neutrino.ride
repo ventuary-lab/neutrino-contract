@@ -3,7 +3,7 @@
 {-# SCRIPT_TYPE ACCOUNT #-}
 #
 # Main Smart Contract of Neutrino Protocol
-# Implemented actions: Swap, Bond Liquidation, Leasing
+# Implemented actions: Swap, Base Token Liquidation, Leasing
 #
 
 #-------------------Base functions----------------------
@@ -53,7 +53,7 @@ let PAULI = 1000000
 
 #-------------------Constructor-------------------------
 let NeutrinoAssetIdKey = "neutrino_asset_id"
-let BondAssetIdKey = "bond_asset_id"
+let BaseAssetIdKey = "base_asset_id"
 let AuctionContractKey = "auction_contract"
 let LiquidationContractKey = "liquidation_contract"
 let RPDContractKey = "rpd_contract"
@@ -90,7 +90,7 @@ func getRPDProfitKey(count: Int) = "rpd_profit" + "_" + toString(count)
 #-------------------Convert functions-------------------
 func convertNeutrinoToWaves(amount: Int, price: Int) = fraction(fraction(amount, 100, price),WAVELET, PAULI)
 func convertWavesToNeutrino(amount: Int, price: Int) = fraction(fraction(amount, price, 100), PAULI, WAVELET)
-func convertWavesToBond(amount: Int, price: Int) = convertWavesToNeutrino(amount, price) # it's here to be more explicit with convertation
+func convertWavesToBase(amount: Int, price: Int) = convertWavesToNeutrino(amount, price) # it's here to be more explicit with convertation
 func convertJsonArrayToList(jsonArray: String) = {
    jsonArray.split(",") #jsonArray.take(size(jsonArray)-1).drop(1).split(",")
 }
@@ -110,8 +110,8 @@ let balanceWavesLockInterval = getNumberByKey(BalanceWavesLockIntervalKey)
 let balanceNeutrinoLockInterval = getNumberByKey(BalanceNeutrinoLockIntervalKey)
 let minWavesSwapAmount = getNumberByKey(MinWavesSwapAmountKey)
 let minNeutrinoSwapAmount = getNumberByKey(MinNeutrinoSwapAmountKey)
-let bondAssetId = fromBase58String("6nSpVyNH7yM69eg446wrQR94ipbbcmZMU1ENPwanC97g") # NSBT with 6 decimals as USDN does
-let deprecatedBondAssetId = fromBase58String("975akZBfnMj513U7MZaHKzQrmsEx5aE3wdWKTrHBhbjF") # USDNB with 0 decimals
+let baseAssetId = fromBase58String("6nSpVyNH7yM69eg446wrQR94ipbbcmZMU1ENPwanC97g") # NSBT with 6 decimals as USDN does
+let deprecatedBaseAssetId = fromBase58String("975akZBfnMj513U7MZaHKzQrmsEx5aE3wdWKTrHBhbjF") # previous base token with 0 decimals
 
 let neutrinoContract = this
 #-------------------Global vars deficit, locked & supply -------------------------
@@ -239,21 +239,21 @@ func withdraw(account : String, index: Int) = {
     }
 }
 
-# Transfers bonds from neutrino.ride to auction.ride to fulfill 'buy bonds' orders
-# Is called n-times until all pending orders on auction.ride are fulfilled or to keep NB reserves equal to total USDN supply
+# Transfers base tokens from neutrino.ride to auction.ride to fulfill 'buy base tokens' orders
+# Is called n-times until all pending orders on auction.ride are fulfilled or to keep NSBT reserves equal to total USDN supply
 # [called by pacemaker oracles]
 @Callable(i)
 func transferToAuction() = {
-    let auctionNBAmount = neutrinoSupply - assetBalance(addressFromStringValue(auctionContract), bondAssetId)
+    let auctionBaseAmount = neutrinoSupply - assetBalance(addressFromStringValue(auctionContract), baseAssetId)
     let surplusWithLiquidation = (surplus - assetBalance(addressFromStringValue(liquidationContract), neutrinoAssetId)) #in 6 decimals
     if(isBlocked)
         then throw("contract is blocked by EMERGENCY SHUTDOWN actions untill reactivation by emergency oracles") # see control.ride
-    else if(auctionNBAmount > 1*PAULI)
-        then TransferSet([ScriptTransfer(addressFromStringValue(auctionContract), auctionNBAmount, bondAssetId)])
+    else if(auctionBaseAmount > 1*PAULI)
+        then TransferSet([ScriptTransfer(addressFromStringValue(auctionContract), auctionBaseAmount, baseAssetId)])
     else if(surplusWithLiquidation >= 1*PAULI)
         then TransferSet([ScriptTransfer(addressFromStringValue(liquidationContract), surplusWithLiquidation, neutrinoAssetId)])
     else 
-        throw("bond were generated or do not need it. Deficit:" + toString(auctionNBAmount) + "|" + toString(0) + ". Surplus:" + toString(surplusWithLiquidation) + "|" + toString(surplus))
+        throw("base tokens were generated or do not need it. Deficit:" + toString(auctionBaseAmount) + "|" + toString(0) + ". Surplus:" + toString(surplusWithLiquidation) + "|" + toString(surplus))
 }
 
 # Transfers tokens from one address to another via smart contact
@@ -262,18 +262,6 @@ func transferToAuction() = {
 func transfer(account: String) = {
     let pmt = extract(i.payment)
     TransferSet([ScriptTransfer(addressFromStringValue(account), pmt.amount, pmt.assetId)])
-}
-
-
-# USDNB (0 decimals) to NSBT (6 decimals) liquidation orders migration method (temporary method)
-# [called by user]
-@Callable(i)
-func migrationUSDNB2NSBTSwap() = {
-    let pmt = extract(i.payment)
-    let account = i.caller
-    if (deprecatedBondAssetId != pmt.assetId)
-        then throw("error: attempt to swap not USDNB tokens")
-    else TransferSet([ScriptTransfer(account, pmt.amount*PAULI, bondAssetId)])
 }
 
 # LeaseCancelTransaction depends from swapNeutrinoToWaves() result i.e. waves amount is not enought for future swaps
