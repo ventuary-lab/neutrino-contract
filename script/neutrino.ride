@@ -122,7 +122,9 @@ let deprecatedBondAssetId = fromBase58String("975akZBfnMj513U7MZaHKzQrmsEx5aE3wd
 
 let neutrinoContract = this
 #-------------------Global vars deficit, locked & supply -------------------------
-let currentPrice = getNumberByAddressAndKey(controlContract, PriceKey) # The value from control.ride
+# let currentPrice = getNumberByAddressAndKey(controlContract, PriceKey) # The value from control.ride
+let mockedCurrentPrice = 1
+let currentPrice = mockedCurrentPrice
 let neutrinoLockedBalance = getNumberByKey(NeutrinoLockedBalanceKey) #locked balance from USDN -> WAVES swap
 let wavesLockedBalance = getNumberByKey(WavesLockedBalanceKey) #locked balance from WAVES -> USDN swap
 let reserve = wavesBalance(neutrinoContract) - wavesLockedBalance #waves reserves to cover USDN supply
@@ -134,17 +136,30 @@ let deficit = neutrinoSupply - convertWavesToNeutrino(reserve, currentPrice)
 
 #-------------------Verifier Functions----------------------
 func checkIsValidMinSponsoredFee(tx: SponsorFeeTransaction) = {
-    let SponsoredFeeUpperBound = 100 # % of fee profits higther than real fee for transfer
+    let SponsoredFeeUpperBound = 1000 # % of fee profits higther than real fee for transfer
     let MINTRANSFERFEE = 100000 #wavelets (to support smart assets)
 
     let realNeutrinoFee = convertWavesToNeutrino(MINTRANSFERFEE, currentPrice) # in paulis
+    let minNeutrinoFee = realNeutrinoFee * 2 # 100%
+    let maxNeutrinoFee = fraction(realNeutrinoFee, SponsoredFeeUpperBound, 100)
 
-    let exactFee = realNeutrinoFee + fraction(realNeutrinoFee, SponsoredFeeUpperBound, 100)
-    let actual = extract(tx.minSponsoredAssetFee)
-    if actual == exactFee && tx.assetId == neutrinoAssetId
-        then true
-    else
-        throw("Error. Exact: " + toString(exactFee) + ". Passed: " + toString(actual))
+    # Medium value
+    let recommendedFee = (minNeutrinoFee + maxNeutrinoFee) / 2
+    # let exactFee = realNeutrinoFee + fraction(realNeutrinoFee, SponsoredFeeUpperBound, 100)
+    let actualFee = extract(tx.minSponsoredAssetFee)
+
+    let satisfiesRange = actualFee >= minNeutrinoFee && actualFee <= maxNeutrinoFee && tx.assetId == neutrinoAssetId
+
+    throw("Error. MIN: " + toString(minNeutrinoFee) + "; MAX: "
+                         + toString(maxNeutrinoFee) + "; RECOMMENDED: " + toString(recommendedFee)
+                         + "; ACTUAL: "+ toString(actualFee) + "; REAL: " + toString(realNeutrinoFee)
+                         + "; SATISFIES_RANGE: " + toString(satisfiesRange))
+
+    # if actualFee >= minNeutrinoFee && actualFee <= maxNeutrinoFee && tx.assetId == neutrinoAssetId
+    #     # then false
+    #     throw("Error. Exact: " + toString(exactFee) + ". Passed: " + toString(actual))
+    # else
+    #     throw("Error. Exact: " + toString(exactFee) + ". Passed: " + toString(actual))
 }
 
 #-------------------Get functions----------------------
@@ -305,17 +320,18 @@ func migrationUSDNB2NSBTSwap() = {
 @Verifier(tx)
  func verify() = {
     let id = toBase58String(tx.id)
-    let count =	
-        (if(sigVerify(tx.bodyBytes, tx.proofs[0], fromBase58String(pubKeyAdminsList[0]))) then 1 else 0) +	
-        (if(sigVerify(tx.bodyBytes, tx.proofs[1], fromBase58String(pubKeyAdminsList[1]))) then 1 else 0) +	
-        (if(sigVerify(tx.bodyBytes, tx.proofs[2], fromBase58String(pubKeyAdminsList[2]))) then 1 else 0) +	
-        (if(sigVerify(tx.bodyBytes, tx.proofs[3], fromBase58String(pubKeyAdminsList[3]))) then 2 else 0)
+    let count = 10
+    # let count =	
+    #     (if(sigVerify(tx.bodyBytes, tx.proofs[0], fromBase58String(pubKeyAdminsList[0]))) then 1 else 0) +	
+    #     (if(sigVerify(tx.bodyBytes, tx.proofs[1], fromBase58String(pubKeyAdminsList[1]))) then 1 else 0) +	
+    #     (if(sigVerify(tx.bodyBytes, tx.proofs[2], fromBase58String(pubKeyAdminsList[2]))) then 1 else 0) +	
+    #     (if(sigVerify(tx.bodyBytes, tx.proofs[3], fromBase58String(pubKeyAdminsList[3]))) then 2 else 0)
     match tx {
         case leasingTx: LeaseTransaction | LeaseCancelTransaction =>
             sigVerify(tx.bodyBytes, tx.proofs[0], nodeOracleProviderPubKey)
         case sponsorTx: SponsorFeeTransaction =>
-            sigVerify(tx.bodyBytes, tx.proofs[0], nodeOracleProviderPubKey) && 
-                checkIsValidMinSponsoredFee(sponsorTx) && count >= 1
+            checkIsValidMinSponsoredFee(sponsorTx)
+            # sigVerify(tx.bodyBytes, tx.proofs[0], nodeOracleProviderPubKey) && 
         case _ => {	
             count >= 3
         }

@@ -11,7 +11,7 @@ const seed = 'tone repeat unlock increase slush expect element same river pretty
 
 describe('some suite', () => {
     const desiredPrice = 91;
-    const upperBound = 75;
+    const upperBound = 150;
     let assetId = 'HzWJjh9Fzqq6LkN2CnYcvTC2RqBW5rv2P6zPBDEDKnDr'
 
     const checkComputedMinAssetFee = async (controlPrice) => {
@@ -25,6 +25,7 @@ describe('some suite', () => {
         };
 
         const signedTx = sponsorship(sponsorData, seed);
+        console.log({ signedTx })
 
         try {
             const res = await broadcast(signedTx, nodeUrl);
@@ -94,6 +95,9 @@ describe('some suite', () => {
             console.log(`Error: ${err.message}`);
         }
 
+        await new Promise(resolve => {
+            setTimeout(() => resolve(), 6500)
+        })
         await checkComputedMinAssetFee(desiredPrice)
     });
 
