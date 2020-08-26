@@ -7,7 +7,7 @@ describe('Leasing test', async function () {
             testAccount: 100000 * deployHelper.WAVELET
         })
 
-        deployResult = await deployHelper.deploy("TST-N", "TST-NB", "test asset", "test bond asset", address(accounts.testAccount), 10)
+        deployResult = await deployHelper.deploy("TST-N", "TST-NSBT", "test asset", "test base asset", address(accounts.testAccount), 10)
 
         let amount = deployHelper.getRandomArbitrary(1, 99999) * deployHelper.WAVELET
 

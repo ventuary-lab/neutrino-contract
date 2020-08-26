@@ -3,14 +3,14 @@ const deployHelper = require('../../neutrino-api/ContractHelper.js').ContractHel
 const wvs = 10 ** 8;
 
 const symbolNeutrino = "USD-TN"
-const symbolBond = "USD-TNB"
+const symbolBase = "TNSBT"
 const descriptionNeutrino = "USD test neutrino asset" 
-const descriptionBond = "USD test neutrino bond asset" 
+const descriptionBase = "test base token asset" 
 const nodeAddress = ""
 
 describe('Deploy', async function () {
     it('Deploy', async function () {
-        const result = await deployHelper.deploy(env.SEED, env.API_BASE, env.CHAIN_ID, "./script/", symbolNeutrino, symbolBond, descriptionNeutrino,descriptionBond, nodeAddress, true) 
+        const result = await deployHelper.deploy(env.SEED, env.API_BASE, env.CHAIN_ID, "./script/", symbolNeutrino, symbolBase, descriptionNeutrino, descriptionBase, nodeAddress, true) 
         console.log(JSON.stringify(result))
     });
 })

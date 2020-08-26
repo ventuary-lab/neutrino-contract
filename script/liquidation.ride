@@ -47,7 +47,7 @@ let NeutrinoContractKey = "neutrino_contract"
 
 #-------------------Keys--------------------------------
 let PriceKey = "price"
-let BondAssetIdKey = "bond_asset_id" 
+let BaseAssetIdKey = "base_asset_id" 
 let NeutrinoAssetIdKey = "neutrino_asset_id"
 let ControlContractKey = "control_contract"
 let BalanceLockedkKey = "balance_lock_"
@@ -70,14 +70,14 @@ func getNextOrderKey(orderId: String) = "order_next_" + orderId
 #-------------------Convert functions-------------------
 func convertNeutrinoToWaves(amount: Int, price: Int) = fraction(fraction(amount, 100, price),WAVELET, PAULI)
 func convertWavesToNeutrino(amount: Int, price: Int) = fraction(fraction(amount, price, 100), PAULI, WAVELET)
-func convertWavesToBond(amount: Int, price: Int) = convertWavesToNeutrino(amount, price)
+func convertWavesToBase(amount: Int, price: Int) = convertWavesToNeutrino(amount, price)
 
 #-------------------Global vars -------------------------
 let neutrinoContract = addressFromStringValue(getStringByKey(NeutrinoContractKey))
 let controlContract = addressFromStringValue(getStringByAddressAndKey(neutrinoContract, ControlContractKey)) ## The value from neutrino.ride
 let liquidationContract = this
 let neutrinoAssetId = fromBase58String(getStringByAddressAndKey(neutrinoContract, NeutrinoAssetIdKey)) # Assets ids. The value from neutrino.ride
-let bondAssetId = fromBase58String("6nSpVyNH7yM69eg446wrQR94ipbbcmZMU1ENPwanC97g") # NSBT with 6 decimals as USDN does
+let baseAssetId = fromBase58String("6nSpVyNH7yM69eg446wrQR94ipbbcmZMU1ENPwanC97g") # NSBT with 6 decimals as USDN does
 let firstOrder = getStringByKey(FirstOrderKey)
 
 let isBlocked = getBoolByAddressAndKey(controlContract, "is_blocked")
@@ -149,7 +149,7 @@ func internalAddLiquidationOrder(i: Invocation, price: Int, prevOrder: String) =
         then throw("order amount should be higher than 1 NSBT")
     else if (price < 100)
         then throw("price should be equal or higher than 1 nsbt for 1 usdn. i.e. >= 100; price: " + toString(price))
-    else if (pmt.assetId != bondAssetId) 
+    else if (pmt.assetId != baseAssetId) 
         then throw("can use appropriate neutrino base tokens (nsbt) only")
     else if(getOrderOwner(newOrderId) != "")
         then throw("the order already exists")
@@ -239,7 +239,7 @@ func cancelOrder(orderId : String) = {
                 DataEntry(getOrderStatusKey(orderId), CANCELED)
             ]), 
             TransferSet([
-                ScriptTransfer(i.caller, amount, bondAssetId)
+                ScriptTransfer(i.caller, amount, baseAssetId)
             ])
         )
     }
@@ -249,7 +249,7 @@ func cancelOrder(orderId : String) = {
 # it's calling n-times until all orders from the liquidation queue will be executed during proficit stage
 # [called by pacemaker oracles]
 @Callable(i)
-func liquidateBond() = {
+func liquidateBase() = {
     let liquidationBalance = assetBalance(this, neutrinoAssetId) #paulis
     let surplusPositive = if(surplus <= 0) then 0 else surplus
     let usdnAmount = if(surplusPositive >= liquidationBalance) then liquidationBalance else surplusPositive
@@ -277,29 +277,29 @@ func liquidateBond() = {
         let isOrderFullyFilable = usdnAmount >= totalUSDNRequiredToFillOrder
         let fillableOrderAmount = if(isOrderFullyFilable) then totalUSDNRequiredToFillOrder else usdnAmount #usdn value
 
-        let finalNBTFillable = fraction(fillableOrderAmount, 100, orderPrice) #bt value
+        let finalBaseFillable = fraction(fillableOrderAmount, 100, orderPrice) #bt value
 
-        let nbTokensLiquidateCondition = fraction(surplus + neutrinoSupply, 100, neutrinoSupply) >= orderPrice
+        let baseTokensLiquidateCondition = fraction(surplus + neutrinoSupply, 100, neutrinoSupply) >= orderPrice
 
-        if (!nbTokensLiquidateCondition)
+        if (!baseTokensLiquidateCondition)
             then throw("innapropriate surplus: " + toString(surplus))
         else {
             let isNothingToFillNow = remainedTotal == 0
-            let isNothingToFillAtAll = (filledTotal + finalNBTFillable) == getOrderTotal(firstOrder)
+            let isNothingToFillAtAll = (filledTotal + finalBaseFillable) == getOrderTotal(firstOrder)
             let newStatus = if(isOrderFullyFilable && ( isNothingToFillNow || isNothingToFillAtAll)) then FILLED else NEW
             ScriptResult(
                 WriteSet([
                     DataEntry(getPrevOrderKey(nextOrder), if(newStatus == FILLED) then "" else firstOrder), 
                     DataEntry(FirstOrderKey, if(newStatus == FILLED) then nextOrder else firstOrder),
 
-                    DataEntry(getOrderFilledTotalKey(firstOrder), filledTotal + finalNBTFillable),
+                    DataEntry(getOrderFilledTotalKey(firstOrder), filledTotal + finalBaseFillable),
                     DataEntry(getOrderStatusKey(firstOrder), newStatus),
 
                     DataEntry(CurrentDefaultOrderKey, computeCurrentDefaultOrder(firstOrder))
                 ]),
                 TransferSet([
                     ScriptTransfer(addressFromStringValue(getOrderOwner(firstOrder)), fillableOrderAmount, neutrinoAssetId),
-                    ScriptTransfer(neutrinoContract, finalNBTFillable, bondAssetId)
+                    ScriptTransfer(neutrinoContract, finalBaseFillable, baseAssetId)
                 ])
             )
         }
